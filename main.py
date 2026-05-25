@@ -276,10 +276,12 @@ HTML_CHATBOT = """
             chatBox.scrollTop = chatBox.scrollHeight;
         }
         function simularCargaDocumentos() {
-            const input = document.getElementById("user-input");
-            input.value = "Adjunto mis documentos escaneados (simulación)";
-            enviarMensajeServidor();
-        }
+    agregarMensaje("📎 He subido mis documentos escaneados (cédula).", 'user');
+    // Simular respuesta del bot
+    setTimeout(() => {
+        agregarMensaje("✅ Documentos recibidos. El sistema iniciará la validación. Ahora puedes generar tu código QR con el botón '+'. La validación de tus documentos demorará 24 horas. Una vez transcurrido ese tiempo, preséntate en la oficina con el QR y tus documentos originales.", 'bot');
+    }, 500);
+}
         async function generarQRManual() {
             // Obtener el último mensaje del bot en el chat
             const chatBox = document.getElementById("chat-box");
@@ -362,13 +364,12 @@ INSTRUCCIONES CLAVE:
      * Pasaporte: 200 Bs + 155 UFV (1 UFV = 2.25 Bs) = 548.75 Bs ≈ 78.84 USD.
      * Tripulante terrestre: primera vez 100 UFV = 225 Bs ≈ 32.33 USD; renovación sin costo.
      * Arraigo: 110 UFV = 247.50 Bs ≈ 35.56 USD.
-      - **PROCESO DIGITAL (pre‑registro en este chat)**:
-     * Para iniciar cualquier trámite (pasaporte, viaje al exterior, etc.), el usuario debe usar el botón **clip (📎)** ubicado junto al campo de texto. Allí subirá una copia escaneada de su cédula de identidad (o pasaporte si es extranjero).
-     * El sistema procesará la solicitud en un plazo de 24 horas (simulado).
-     * Una vez validado, el usuario presionará el botón **"+"** y se generará automáticamente un código QR.
-     * Luego solo debe acudir a la oficina de DIGEMIG con el QR (en su teléfono o impreso) y sus documentos originales para verificación rápida (5‑10 minutos).
-     * **No hay que visitar ninguna página web externa ni llenar formularios fuera de este chat. Todo se hace aquí mismo.**
-   - Siempre ofrece generar el QR con el botón "+" al final.
+         - **PROCESO DIGITAL (pre‑registro en este chat)**:
+     * Para iniciar cualquier trámite, el usuario debe usar el botón **clip (📎)** para subir una copia escaneada de su cédula (o pasaporte si es extranjero).
+     * Inmediatamente después, puede presionar el botón **"+"** para generar un código QR. Este QR contiene la información del pre‑registro.
+     * La **validación de los documentos** tomará 24 horas. Durante ese tiempo, el QR aún no será válido.
+     * Una vez transcurridas 24 horas, el usuario debe acudir a la oficina de DIGEMIG con el QR (impreso o en su teléfono) y los **documentos originales** para verificación rápida (5‑10 minutos).
+     * **No uses las palabras "simulado" o "simulación".** El proceso es real dentro del prototipo.
 
 3. **Si el usuario es extranjero** (dice "soy de China", "soy de Chile", etc.):
    - Clasifica según las listas de GRUPO I, II, III (ver más abajo).
@@ -481,6 +482,17 @@ INSTRUCCIONES CLAVE:
 
 7. **Si el usuario pregunta por un país que no está en estas listas** (ej. México, EE.UU., Europa, etc.), responde: "Para viajar a [país], te recomiendo consultar la página oficial de su consulado o revisar los acuerdos de visados. ¿Necesitas ayuda con el pre-registro digital para tu salida de Bolivia?"
 
+8. **Cuando el usuario haga clic en el botón clip (📎) o escriba "adjunto mis documentos"**:
+   - Responde que los documentos han sido recibidos correctamente.
+   - Indica que la validación tomará 24 horas (tiempo real, no simulado).
+   - Explica que ya puede generar su código QR con el botón "+".
+   - No uses las palabras "simulado" ni "simulación". El proceso debe sonar real.
+   - Ejemplo de respuesta: "✅ Documentos recibidos. El sistema iniciará la validación. Ahora puedes generar tu código QR con el botón '+'. La validación de tus documentos demorará 24 horas. Una vez transcurrido ese tiempo, preséntate en la oficina con el QR y tus documentos originales."
+
+9. **Cuando el usuario pregunte "cómo hago el pre-registro", "quiero iniciar mi trámite", "pasos para el pre-registro", "cómo genero el QR", etc., sin haber adjuntado documentos**:
+   - Explica el proceso completo dentro de este chat, sin mencionar páginas web externas ni correos electrónicos.
+   - Di algo como: "Para iniciar tu trámite, primero haz clic en el botón clip (📎) y sube una foto escaneada de tu cédula (o pasaporte si eres extranjero). Luego presiona el botón '+' para generar tu código QR inmediato. La validación de tus documentos demorará 24 horas. Después de ese tiempo, acude a la oficina de DIGEMIG con el QR impreso o en tu teléfono y tus documentos originales para verificación rápida."
+   - Nunca redirijas a páginas web externas ni pidas correos electrónicos.
 Recuerda: toda la información de requisitos de la sección 6 es solo para ciudadanos bolivianos que SALEN de Bolivia. Los costos y requisitos de ingreso a Bolivia para extranjeros ya están cubiertos por las listas de grupos (sección 5).
 """
 
