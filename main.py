@@ -21,7 +21,7 @@ app.mount("/archivos", StaticFiles(directory="static"), name="archivos")
 # CONFIGURACIÓN DE LA IA (GROQ)
 # ------------------------------------------------------------------
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODELO_IA = "llama-3.3-70b-versatile"
+MODELO_IA = "llama-3.1-70b-versatile"   # Modelo más estable
 
 # ------------------------------------------------------------------
 # VALORES FIJOS DE CONVERSIÓN
@@ -276,14 +276,11 @@ HTML_CHATBOT = """
             chatBox.scrollTop = chatBox.scrollHeight;
         }
         function simularCargaDocumentos() {
-    agregarMensaje("📎 He subido mis documentos escaneados (cédula).", 'user');
-    // Simular respuesta del bot
-    setTimeout(() => {
-        agregarMensaje("✅ Documentos recibidos. El sistema iniciará la validación. Ahora puedes generar tu código QR con el botón '+'. La validación de tus documentos demorará 24 horas. Una vez transcurrido ese tiempo, preséntate en la oficina con el QR y tus documentos originales.", 'bot');
-    }, 500);
-}
+            const input = document.getElementById("user-input");
+            input.value = "Adjunto mis documentos escaneados";
+            enviarMensajeServidor();
+        }
         async function generarQRManual() {
-            // Obtener el último mensaje del bot en el chat
             const chatBox = document.getElementById("chat-box");
             const botMessages = chatBox.querySelectorAll(".flex.justify-start .whitespace-pre-wrap");
             if (botMessages.length === 0) {
@@ -292,15 +289,13 @@ HTML_CHATBOT = """
             }
             const lastBotMessage = botMessages[botMessages.length - 1].innerText;
             
-            // Extraer nacionalidad y monto del texto
             let nacionalidad = "";
             let monto = 0;
             
-            // Buscar nacionalidad (prioriza "boliviano")
-            if (lastBotMessage.match(/\\bboliviano\\b/i)) {
+            if (lastBotMessage.toLowerCase().includes("boliviano")) {
                 nacionalidad = "Bolivia";
             } else {
-                const matchNac = lastBotMessage.match(/(?:de|de la|desde)\\s+([A-Za-záéíóúñü\\s]+?)(?:\\s|,|\\.|$)/i);
+                const matchNac = lastBotMessage.match(/(?:de|de la|desde)\s+([A-Za-záéíóúñü\s]+?)(?:\s|,|\.|$)/i);
                 if (matchNac && matchNac[1]) {
                     nacionalidad = matchNac[1].trim();
                 } else {
@@ -309,8 +304,7 @@ HTML_CHATBOT = """
                 }
             }
             
-            // Buscar monto (números seguidos de "Bs", "bolivianos", etc.)
-            const matchMonto = lastBotMessage.match(/(\\d+(?:\\.\\d+)?)\\s*(?:Bs|bolivianos|USD|dólares)/i);
+            const matchMonto = lastBotMessage.match(/(\d+(?:\.\d+)?)\s*(?:Bs|bolivianos|USD|dólares)/i);
             if (matchMonto) {
                 monto = parseFloat(matchMonto[1]);
             } else {
@@ -318,7 +312,6 @@ HTML_CHATBOT = """
                 if (isNaN(monto)) monto = 0;
             }
             
-            // Llamar al backend para generar el QR
             const formData = new FormData();
             formData.append("nacionalidad", nacionalidad);
             formData.append("tramite", "Trámite migratorio");
@@ -364,7 +357,7 @@ INSTRUCCIONES CLAVE:
      * Pasaporte: 200 Bs + 155 UFV (1 UFV = 2.25 Bs) = 548.75 Bs ≈ 78.84 USD.
      * Tripulante terrestre: primera vez 100 UFV = 225 Bs ≈ 32.33 USD; renovación sin costo.
      * Arraigo: 110 UFV = 247.50 Bs ≈ 35.56 USD.
-         - **PROCESO DIGITAL (pre‑registro en este chat)**:
+   - **PROCESO DIGITAL (pre‑registro en este chat)**:
      * Para iniciar cualquier trámite, el usuario debe usar el botón **clip (📎)** para subir una copia escaneada de su cédula (o pasaporte si es extranjero).
      * Inmediatamente después, puede presionar el botón **"+"** para generar un código QR. Este QR contiene la información del pre‑registro.
      * La **validación de los documentos** tomará 24 horas. Durante ese tiempo, el QR aún no será válido.
@@ -493,6 +486,7 @@ INSTRUCCIONES CLAVE:
    - Explica el proceso completo dentro de este chat, sin mencionar páginas web externas ni correos electrónicos.
    - Di algo como: "Para iniciar tu trámite, primero haz clic en el botón clip (📎) y sube una foto escaneada de tu cédula (o pasaporte si eres extranjero). Luego presiona el botón '+' para generar tu código QR inmediato. La validación de tus documentos demorará 24 horas. Después de ese tiempo, acude a la oficina de DIGEMIG con el QR impreso o en tu teléfono y tus documentos originales para verificación rápida."
    - Nunca redirijas a páginas web externas ni pidas correos electrónicos.
+
 Recuerda: toda la información de requisitos de la sección 6 es solo para ciudadanos bolivianos que SALEN de Bolivia. Los costos y requisitos de ingreso a Bolivia para extranjeros ya están cubiertos por las listas de grupos (sección 5).
 """
 
