@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+groq
+qrcode
+pillow
+python-multipart
+python-dotenv
