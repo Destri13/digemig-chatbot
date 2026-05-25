@@ -21,7 +21,7 @@ app.mount("/archivos", StaticFiles(directory="static"), name="archivos")
 # CONFIGURACIÓN DE LA IA (GROQ)
 # ------------------------------------------------------------------
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODELO_IA = "llama-3.1-70b-versatile"   # Modelo más estable
+MODELO_IA = "llama-3.1-8b-instant"   # Modelo más estable
 
 # ------------------------------------------------------------------
 # VALORES FIJOS DE CONVERSIÓN
