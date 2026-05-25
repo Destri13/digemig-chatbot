@@ -8,7 +8,9 @@ from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from groq import Groq
+from dotenv import load_dotenv
 
+load_dotenv()
 app = FastAPI(title="DIGEMIG - Ecosistema Digital Completo")
 
 if not os.path.exists("static"):
@@ -18,9 +20,6 @@ app.mount("/archivos", StaticFiles(directory="static"), name="archivos")
 # ------------------------------------------------------------------
 # CONFIGURACIÓN DE LA IA (GROQ)
 # ------------------------------------------------------------------
-from dotenv import load_dotenv
-import os
-load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 MODELO_IA = "llama-3.3-70b-versatile"
 
@@ -207,7 +206,7 @@ HTML_PORTAL = """
 """
 
 # ------------------------------------------------------------------
-# HTML DEL CHATBOT (con Enter y botones)
+# HTML DEL CHATBOT (con Enter, clip, y QR automático)
 # ------------------------------------------------------------------
 HTML_CHATBOT = """
 <!DOCTYPE html>
@@ -282,21 +281,58 @@ HTML_CHATBOT = """
             enviarMensajeServidor();
         }
         async function generarQRManual() {
-            const nacionalidad = prompt("✍️ Escribe tu nacionalidad:", "Bolivia");
-            const tramite = prompt("📄 Tipo de trámite:", "Pasaporte");
-            let monto = parseFloat(prompt("💰 Monto total en Bs (si no sabes, escribe 0):", "0"));
-            if (isNaN(monto)) monto = 0;
+            // Obtener el último mensaje del bot en el chat
+            const chatBox = document.getElementById("chat-box");
+            const botMessages = chatBox.querySelectorAll(".flex.justify-start .whitespace-pre-wrap");
+            if (botMessages.length === 0) {
+                agregarMensaje("❌ No hay información para generar el QR. Primero conversa con el asistente.", 'bot');
+                return;
+            }
+            const lastBotMessage = botMessages[botMessages.length - 1].innerText;
+            
+            // Extraer nacionalidad y monto del texto
+            let nacionalidad = "";
+            let monto = 0;
+            
+            // Buscar nacionalidad (prioriza "boliviano")
+            if (lastBotMessage.match(/\\bboliviano\\b/i)) {
+                nacionalidad = "Bolivia";
+            } else {
+                const matchNac = lastBotMessage.match(/(?:de|de la|desde)\\s+([A-Za-záéíóúñü\\s]+?)(?:\\s|,|\\.|$)/i);
+                if (matchNac && matchNac[1]) {
+                    nacionalidad = matchNac[1].trim();
+                } else {
+                    nacionalidad = prompt("No detecté tu nacionalidad. Escríbela:", "Bolivia");
+                    if (!nacionalidad) return;
+                }
+            }
+            
+            // Buscar monto (números seguidos de "Bs", "bolivianos", etc.)
+            const matchMonto = lastBotMessage.match(/(\\d+(?:\\.\\d+)?)\\s*(?:Bs|bolivianos|USD|dólares)/i);
+            if (matchMonto) {
+                monto = parseFloat(matchMonto[1]);
+            } else {
+                monto = parseFloat(prompt("¿Cuál es el monto total en Bs? (puedes poner 0)", "0"));
+                if (isNaN(monto)) monto = 0;
+            }
+            
+            // Llamar al backend para generar el QR
             const formData = new FormData();
             formData.append("nacionalidad", nacionalidad);
-            formData.append("tramite", tramite);
+            formData.append("tramite", "Trámite migratorio");
             formData.append("monto", monto.toString());
-            const response = await fetch("/generar-qr", { method: "POST", body: formData });
-            const data = await response.json();
-            if (data.qr_image) {
-                agregarMensaje(`<img src="data:image/png;base64,${data.qr_image}" class="w-40 h-40 mx-auto my-2 border-2 border-black rounded-lg"/>`, 'bot');
-                agregarMensaje(`📱 Código QR generado. Preséntalo en ventanilla junto con tus documentos originales para verificación rápida. Payload: ${data.payload}`, 'bot');
-            } else {
-                agregarMensaje("❌ Error generando QR", 'bot');
+            
+            try {
+                const response = await fetch("/generar-qr", { method: "POST", body: formData });
+                const data = await response.json();
+                if (data.qr_image) {
+                    agregarMensaje(`<img src="data:image/png;base64,${data.qr_image}" class="w-40 h-40 mx-auto my-2 border-2 border-black rounded-lg"/>`, 'bot');
+                    agregarMensaje(`📱 Código QR generado para ${nacionalidad} (${monto} Bs). Preséntalo en ventanilla con tus documentos originales.`, 'bot');
+                } else {
+                    agregarMensaje("❌ Error generando QR", 'bot');
+                }
+            } catch(e) {
+                agregarMensaje("❌ Error de red. Intenta de nuevo.", 'bot');
             }
         }
     </script>
