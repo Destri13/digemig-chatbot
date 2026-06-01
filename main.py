@@ -7,21 +7,23 @@ import base64
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from groq import Groq
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
-app = FastAPI(title="DIGEMIG - Ecosistema Digital Completo")
+app = FastAPI(title="DIGEMIG - Ecosistema Digital Completo (Gemini)")
 
 if not os.path.exists("static"):
     os.makedirs("static")
 app.mount("/archivos", StaticFiles(directory="static"), name="archivos")
 
 # ------------------------------------------------------------------
-# CONFIGURACIÓN DE LA IA (GROQ)
+# CONFIGURACIÓN DE LA IA (GOOGLE GEMINI)
 # ------------------------------------------------------------------
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODELO_IA = "llama-3.1-8b-instant"   # Modelo más estable
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=GEMINI_API_KEY)
+MODELO_IA = "gemini-2.5-flash"   # Modelo rápido y estable
 
 # ------------------------------------------------------------------
 # VALORES FIJOS DE CONVERSIÓN
@@ -63,7 +65,7 @@ def obtener_grupo_pais(pais: str) -> int:
         for p in sublist:
             if p.lower() == pais_lower:
                 return 3
-    return 2  # Por defecto Grupo II
+    return 2
 
 def calcular_costo_ingreso(pais: str, tipo_ingreso: str = "terrestre") -> dict:
     grupo = obtener_grupo_pais(pais)
@@ -83,7 +85,7 @@ def calcular_costo_ingreso(pais: str, tipo_ingreso: str = "terrestre") -> dict:
         arancel_ufv = 90
         arancel_bs = arancel_ufv * UFV_A_BS
         arancel_usd = round(arancel_bs / USD_A_BS, 2)
-        desc = "Visa consular obligatoria (aprobación previa de DIGEMIG). Costo de solicitud: 30 USD (aprox 208.80 Bs). Además paga tasa en frontera."
+        desc = "Visa consular obligatoria (aprobación previa de DIGEMIG). Costo de solicitud: 30 USD aparte."
     total_bs = arancel_bs + tasa_bs
     total_usd = round(total_bs / USD_A_BS, 2)
     return {
@@ -110,9 +112,6 @@ def calcular_costo_salida(tipo_usuario: str) -> dict:
         desc = f"Tasa de salida para residente extranjero legal: {ufv} UFV = {total_bs:.2f} Bs = {total_usd:.2f} USD."
     return {"total_bs": total_bs, "total_usd": total_usd, "descripcion": desc}
 
-# ------------------------------------------------------------------
-# FUNCIONES DE TRÁMITES (costos directos)
-# ------------------------------------------------------------------
 def tramite_pasaporte():
     total_bs = 200.0 + (155 * UFV_A_BS)
     total_usd = round(total_bs / USD_A_BS, 2)
@@ -128,9 +127,6 @@ def tramite_arraigo():
     total_usd = round(total_bs / USD_A_BS, 2)
     return {"total_bs": total_bs, "total_usd": total_usd}
 
-# ------------------------------------------------------------------
-# BASE DE DATOS DE EXPEDIENTES (5 ciudadanos ejemplo)
-# ------------------------------------------------------------------
 DB_SISTEMA = {
     "ARG123": {"nombres": "Carlos", "apellidos": "Mendizabal Ortega", "pais": "ARGENTINA", "grupo": "Grupo 1", "tramite": "Radicatoria Temporal", "arancel": 0.0, "tasa": 30.0, "pdf": "/archivos/Expediente_ARG123.pdf"},
     "USA999": {"nombres": "Michael", "apellidos": "Smith Johnson", "pais": "ESTADOS UNIDOS", "grupo": "Grupo 3", "tramite": "Visa de Turismo", "arancel": 1113.60, "tasa": 30.0, "pdf": "/archivos/Expediente_USA999.pdf"},
@@ -206,7 +202,7 @@ HTML_PORTAL = """
 """
 
 # ------------------------------------------------------------------
-# HTML DEL CHATBOT (con Enter, clip, y QR automático)
+# HTML DEL CHATBOT (con QR mejorado)
 # ------------------------------------------------------------------
 HTML_CHATBOT = """
 <!DOCTYPE html>
@@ -282,33 +278,70 @@ HTML_CHATBOT = """
         }
         async function generarQRManual() {
             const chatBox = document.getElementById("chat-box");
-            const botMessages = chatBox.querySelectorAll(".flex.justify-start .whitespace-pre-wrap");
+            const botMessages = Array.from(chatBox.querySelectorAll(".flex.justify-start .whitespace-pre-wrap"));
             if (botMessages.length === 0) {
                 agregarMensaje("❌ No hay información para generar el QR. Primero conversa con el asistente.", 'bot');
                 return;
             }
-            const lastBotMessage = botMessages[botMessages.length - 1].innerText;
             
             let nacionalidad = "";
             let monto = 0;
             
-            if (lastBotMessage.toLowerCase().includes("boliviano")) {
-                nacionalidad = "Bolivia";
-            } else {
-                const matchNac = lastBotMessage.match(/(?:de|de la|desde)\s+([A-Za-záéíóúñü\s]+?)(?:\s|,|\.|$)/i);
-                if (matchNac && matchNac[1]) {
-                    nacionalidad = matchNac[1].trim();
-                } else {
-                    nacionalidad = prompt("No detecté tu nacionalidad. Escríbela:", "Bolivia");
-                    if (!nacionalidad) return;
+            // Buscar nacionalidad en mensajes del bot
+            for (let i = botMessages.length - 1; i >= 0; i--) {
+                const msg = botMessages[i].innerText.toLowerCase();
+                if (msg.includes("boliviano") || msg.includes("ciudadano boliviano")) {
+                    nacionalidad = "Bolivia";
+                    break;
+                }
+                // Buscar "de X país" (asumiendo que X empieza con mayúscula)
+                const matchPais = msg.match(/(?:de|de la|desde)\s+([A-Z][a-záéíóúñü]+(?:\s+[A-Z][a-záéíóúñü]+)?)/);
+                if (matchPais && matchPais[1]) {
+                    const posible = matchPais[1].toLowerCase();
+                    if (posible !== "la paz" && posible !== "bolivia") {
+                        nacionalidad = matchPais[1];
+                        break;
+                    }
                 }
             }
             
-            const matchMonto = lastBotMessage.match(/(\d+(?:\.\d+)?)\s*(?:Bs|bolivianos|USD|dólares)/i);
-            if (matchMonto) {
-                monto = parseFloat(matchMonto[1]);
-            } else {
-                monto = parseFloat(prompt("¿Cuál es el monto total en Bs? (puedes poner 0)", "0"));
+            // Si no se encontró, buscar en mensajes del usuario
+            if (!nacionalidad) {
+                const userMessages = Array.from(chatBox.querySelectorAll(".flex.justify-end .whitespace-pre-wrap"));
+                for (let i = userMessages.length - 1; i >= 0; i--) {
+                    const msg = userMessages[i].innerText.toLowerCase();
+                    if (msg.includes("boliviano") || msg.includes("soy de la paz")) {
+                        nacionalidad = "Bolivia";
+                        break;
+                    }
+                    const matchUser = msg.match(/(?:soy de|de|desde)\s+([A-Za-záéíóúñü\s]+?)(?:\s|,|\.|$)/i);
+                    if (matchUser && matchUser[1]) {
+                        const posible = matchUser[1].toLowerCase();
+                        if (posible !== "la paz" && posible !== "bolivia") {
+                            nacionalidad = matchUser[1];
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Buscar monto en mensajes del bot
+            for (let i = botMessages.length - 1; i >= 0; i--) {
+                const msg = botMessages[i].innerText;
+                const match = msg.match(/(\d+(?:\.\d+)?)\s*(?:Bs|bolivianos|USD|dólares)/i);
+                if (match) {
+                    monto = parseFloat(match[1]);
+                    break;
+                }
+            }
+            
+            // Si no se detectó, usar prompts solo como último recurso
+            if (!nacionalidad) {
+                nacionalidad = prompt("No detecté tu nacionalidad. Escríbela:", "Bolivia");
+                if (!nacionalidad) return;
+            }
+            if (monto === 0) {
+                monto = parseFloat(prompt("No detecté el monto. ¿Cuál es el total en Bs? (ej: 26)", "0"));
                 if (isNaN(monto)) monto = 0;
             }
             
@@ -336,12 +369,12 @@ HTML_CHATBOT = """
 """
 
 # ------------------------------------------------------------------
-# MEMORIA DE CONVERSACIÓN (para mantener contexto)
+# MEMORIA DE CONVERSACIÓN
 # ------------------------------------------------------------------
 conversacion_por_sesion = {}
 
 # ------------------------------------------------------------------
-# PROMPT DEL SISTEMA (con referencias a las listas y reglas)
+# PROMPT DEL SISTEMA (original, largo)
 # ------------------------------------------------------------------
 PROMPT_SISTEMA = f"""
 Eres el asistente virtual oficial de DIGEMIG Bolivia. Tu trabajo es mantener una conversación natural, inteligente y útil.
@@ -491,7 +524,7 @@ Recuerda: toda la información de requisitos de la sección 6 es solo para ciuda
 """
 
 # ------------------------------------------------------------------
-# RESPUESTA LOCAL MINIMAL (solo preguntas cerradas de costos)
+# RESPUESTA LOCAL (costos directos)
 # ------------------------------------------------------------------
 def responder_local(mensaje: str) -> str | None:
     m = mensaje.lower()
@@ -525,39 +558,44 @@ async def chatbot_page():
 
 @app.post("/api/chat")
 async def api_chat(mensaje: str = Form(...)):
-    # 1. Respuesta local solo para costos directos
+    # Respuesta local para costos directos
     resp_local = responder_local(mensaje)
     if resp_local:
         return JSONResponse(content={"respuesta": resp_local})
     
-    # 2. Obtener historial de esta "sesión"
     historial = conversacion_por_sesion.get("historial", [])
     
-    # 3. Construir mensajes para Groq
-    messages = [
-        {"role": "system", "content": PROMPT_SISTEMA}
-    ]
-    # Añadir historial (últimos 6 mensajes)
+    # Construir contenido para Gemini
+    contents = []
     for msg in historial[-6:]:
-        messages.append(msg)
-    # Añadir mensaje actual
-    messages.append({"role": "user", "content": mensaje})
+        role = msg["role"]
+        gemini_role = "model" if role == "assistant" else "user"
+        contents.append(types.Content(
+            role=gemini_role,
+            parts=[types.Part(text=msg["content"])]
+        ))
+    contents.append(types.Content(
+        role="user",
+        parts=[types.Part(text=mensaje)]
+    ))
     
     try:
-        completion = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODELO_IA,
-            messages=messages,
-            temperature=0.3,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=PROMPT_SISTEMA,
+                temperature=0.3,
+            )
         )
-        respuesta = completion.choices[0].message.content
-        # Guardar en historial
+        respuesta = response.text
         historial.append({"role": "user", "content": mensaje})
         historial.append({"role": "assistant", "content": respuesta})
         conversacion_por_sesion["historial"] = historial
         return JSONResponse(content={"respuesta": respuesta})
     except Exception as e:
         print(e)
-        return JSONResponse(content={"respuesta": "⚠️ El sistema está congestionado. Por favor, intenta de nuevo más tarde o usa el botón '+' para generar tu QR manualmente."})
+        return JSONResponse(content={"respuesta": "⚠️ El sistema está congestionado. Intenta de nuevo o usa el botón '+' para QR manual."})
 
 @app.post("/generar-qr")
 async def generar_qr(nacionalidad: str = Form(""), tramite: str = Form(""), monto: float = Form(0.0)):
