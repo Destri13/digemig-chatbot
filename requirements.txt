@@ -1,7 +1,7 @@
 fastapi
 uvicorn
-groq
+python-dotenv
 qrcode
 pillow
 python-multipart
-python-dotenv
+google-genai
